@@ -1,0 +1,343 @@
+---
+title: "Midterm_Sumin Oh"
+author: "Sumin Oh"
+date: "2024-11-04"
+output: html_document
+---
+
+## 1. Import Data
+```{r}
+library(fpp2)
+library(readr)
+library(readxl)
+library(forecast)
+library(fpp)
+library(ggplot2)
+
+sales = read.csv("https://raw.githubusercontent.com/su-min-oh/midterm/main/sales.csv",header=FALSE)
+
+#make it a time series data
+sales_ts = ts(sales$V2,start=c(2020,1),frequency=12)
+```
+
+## 2. Plot and Inference
+```{r}
+plot(sales_ts)
+```
+
+#### Observation Summary
+The data is about the healthcare product sales from Jan 2020 to 2024. The graph is showing gradually upward trend, however, from 2023, the upward slope is not as steep as before. Also from around 2023, there are dramatical ups and downs of the sales values. As for seasonality, I cannot conclude that it has seasonality only with this time series plot. I should do further analysis for that.
+
+## 3. Central Tendancy
+```{r}
+#Min, max, mean, median, 1st and 3rd Quartile values
+summary(sales_ts)
+#boxplot
+boxplot(sales_ts)
+```
+
+#### Observation Summary
+1) The maximum value is more than 20k, while minimum is only around 1k. This indicates that the data range is pretty broad. 
+2) Mean is greater than Median, and it means that there is a possibility that the data is skewed to the right side. This again means that most of the data is distributed on the smaller side, while big values can be found only in special cases.
+3) Considering that 3rd quartile is 14346 and 1st quartile is 2892, IQR is 11454. 
+4) By looking at the boxplot, we can see that data is slightly right skewed as upper whisker is longer than the lower one. The absence of outliers indicates that while there is some skewness, the data is not heavily skewed, showing a moderately balanced distribution.
+
+## 4. Decomposition
+```{r}
+sales_ts_decomp = decompose(sales_ts)
+sales_ts_decomp
+plot(sales_ts_decomp)
+```
+
+- Is the time series seasonal? : From the decomposition plot, I can observe that there is a repeated figure in a regular interval of 1 year. So from this point, I can say that this time series data is seasonal.
+
+- The decomposition is "Additive". the decompose() function automatically decided whether to choose additive or multiplicative. The fact that it chose additive means that this data changes in regular pattern and volatility is constant.
+
+- Seasonal indices : can be found in above, in $figure.
+
+- The lowest month : January / The highest month : June
+The reasons behind it can be assumed. I have no idea which drug it is, but one assumption that I can do is that this is a drug that treating insect bites. With this scenario, sales in January, which is the coldest months of the year, will be lower than usual, while sales in June will be the highest with increased outdoor activities. Other than this, I can also assume that this is a kind of health supplements such as vitamins. People will consume this in preparation for the summer vacation, and in January, since many people catches cold, the demand for supplements may decrease as people take prescribed cold medicine instead.
+
+```{r}
+# Plot for time series adjusted for seasonality
+sales_seasadj = seasadj(sales_ts_decomp)
+plot(sales_ts)
+lines(sales_seasadj,col="red")
+```
+
+- I can see there is a considerable gap between the actual time series and the seasonally adjusted time series line, which indicates that seasonality has a substantial impact on the time series. We can conclude that seasonality have big fluctuations in the value of time series.
+
+## 5. Naive Method
+```{r}
+#Output
+sales_naive = naive(sales_ts)
+sales_naive
+
+#Residual Analysis
+naive_res = residuals(sales_naive)
+
+#Plot of residuals
+plot(naive_res)
+abline(h=0, col="red")
+```
+
+- Plot indicates that residuals are not distributed around 0, suggesting that accuracy of this method could be very low. Especially the values of the residuals show that they are moving further and further away from 0 over time. Moreover, I can see there is a pattern of ups and downs. The fact that there is a pattern in residuals means that the model is missing some factors in prediction, such as seasonality or trend.
+
+```{r}
+#Histogram of Residuals
+hist(naive_res)
+```
+
+- This shows that the residuals are quite normally distributed, and it indicates that the model's prediction error is not biased in any particular direction.
+
+```{r}
+#Plot of fitted vs. residuals
+naive_fit = fitted(sales_naive)
+ggplot(data = data.frame(naive_fit, naive_res), aes(x = naive_fit, y = naive_res)) +
+  geom_point(shape = 1)
+```
+
+- Although the residuals are distributed around 0, as the fitted value increases, the variability of the residuals increases and they tend to be skewed downward. Although naive models make stable predictions for small values in the data, they tend to have poor prediction accuracy for large values.
+
+```{r}
+#Plot of actual vs. residuals
+plot(as.numeric(sales_ts),naive_res, xlab="actual",ylab="residuals")
+abline(h=0,col="red")
+```
+
+- This shows that there is no pattern of residuals. However, as the actual value increases, the variance of the residuals tends to increase, meaning that this model is not able to provide accurate prediction for the big values.
+
+```{r}
+#Acf
+plot(Acf(naive_res))
+```
+
+- At some lags, the ACF exceeds the confidence interval, for example, at lags 1, 3, 4, 6, and 7. This suggests that there are significant correlations between residuals at these lags, which indicates that the model does not fully capture all the underlying patterns in the data. This implies that the model may not be accurately reflecting seasonal or trend factors, which could be why its predictions are not accurate enough.
+
+```{r}
+#Measures of accuracy
+accuracy(sales_naive)
+#Forecast for next year (table, plot)
+naive_fc = naive(sales_ts,h=12)
+naive_fc
+plot(naive_fc)
+```
+
+#### Summary of this forecasting technique
+- I forecasted for next 12 months
+
+- How good is the accuracy? : For now, it's hard to measure it's accuracy since I haven't done the accuracy test for other forecast models. Just to assume with the values of MAPE, the absolute percentage error is about 20%, which is very big, so this method seems to be not accurate. But still, it needs to be compared with other models later on.
+
+- Predicted value : By checking the table, it predicts the value of the time series to be 10151.93 for the forecast period. This is the value of the last data from the given datset.
+
+
+
+## 6. Simple Moving Averages
+```{r}
+MA3 = ma(sales_ts, order=3)
+MA6 = ma(sales_ts, order=6)
+MA9 = ma(sales_ts, order=9)
+
+plot(sales_ts)
+lines(MA3,col="red")
+lines(MA6,col="blue")
+lines(MA9,col="green")
+
+#Forecast for the next 12 months using the best one
+MA9_fc = forecast(MA9,h=12)
+plot(MA9_fc)
+```
+
+- Observations of plots as moving average goes up :
+In the plot, as moving average goes up, the line becomes smoother. If you see the green line, it's the most smooth one. As the period we reflect becomes larger, short term noise is mitigated and long term trend tends to be shown. Also, as the moving average goes up, reflection to the latest data becomes slower. So it can show the long term trend of the data well.
+
+- (bonus) : I used order 9 to forecast for next 12 month. The reason being, I see there was a drastic drop in sales at the end of the data. So if I forecast only with recent datas such as 3 or 6 months, it will show the values to be keep decrease for the next 12 months. So I used the data from formal 9 months, to reflect general trend of this sales data.
+
+## 7. Simple Smoothing
+```{r}
+#Simple smoothing for next 12 months
+sales_ets = ets(sales_ts,model="ANN")
+sales_ets_fc = forecast(sales_ets,h=12)
+summary(sales_ets_fc)
+```
+- Here I used ets model and set the model to "ANN", which stands for additive error, no trend, no seasonality. 
+
+- alpha is 0.432, which is in the middle of 0 and 1. This model makes predictions by balancing recent and historical data, which is a setting that makes it somewhat sensitive to current data.
+
+- The value of initial state is 1709.6741, and it represents the initial value when the data starts prediction.
+
+- The value of sigma is 2603.4. It stands for the standard deviation of residuals. The smaller the value, the more accurate the prediction. value of 2603.4 may mean that the model fits the data fairly consistently, but not perfectly.
+
+```{r}
+#Residual Analysis
+sales_ets_res = residuals(sales_ets_fc)
+
+#Plot of residuals
+plot(sales_ets_res)
+abline(h=0,col="red")
+```
+
+- Similar to the ones in naive forecast, as the time goes, size of the residuals become larger. As we checked from the decomposition part, this data has seasonality and it affects the data a lot. But this simple smoothing model just reflects level, not trend or seasonality. So this seems to be natural that residuals have this much fluctuations and gaps.
+
+```{r}
+#Histogram
+hist(sales_ets_res)
+```
+
+- This shows that the residuals are quite normally distributed, and it indicates that the model's prediction error is not biased in any particular direction.
+
+```{r}
+#Plot of fitted vs. residuals
+sales_ets_fitted = fitted(sales_ets_fc)
+ggplot(data = data.frame(fitted = sales_ets_fitted, residuals = sales_ets_res), 
+       aes(x = fitted, y = residuals)) + geom_point()
+```
+
+- This plot shows that when the model predicts large fitted values, the variance of the residuals increases and systematic errors occur.
+
+```{r}
+#Plot of actual vs. residuals
+plot(as.numeric(sales_ts),sales_ets_res, xlab="actual",ylab="residuals")
+abline(h=0,col="red")
+```
+
+- This shows that there a pattern of residuals. As the actual value increases, the variance of the residuals tends to increase. The prediction model shows a stable error at small values, but the error range widens at large values. We can see that the prediction accuracy decreases depending on the size of the data.
+
+```{r}
+#Acf
+plot(Acf(sales_ets_res))
+```
+
+- There is a values that exceeds confidence interval. So we can assume that the residuals are correlated, and the model may not be predicting accurately.
+
+```{r}
+#Measures of accuracy
+accuracy(sales_ets_fc)
+#Forecast for next year (table, plot)
+sales_ets_fc
+plot(sales_ets_fc)
+```
+
+#### Summary of this forecasting technique
+- How good is the accuracy? : Considering the MAPE of naive was 20.1269, accuracy of this simple smoothing method is better than Naive. However, Root mean squre error is about 2556. Considering the average values consisting of this data set, this error is too large. The reason for this could be that this method doesn't reflect trend or seasonality at all.  
+
+- Predicted value : By checking the table, it predicts the value of the time series to be 14074.56 for the whole forecast period. This figure is similar to Naive method since it also shows the same value for the given period. It is because this model forecasts only based on the level of the data.
+
+
+## 8. Holt-Winters
+```{r}
+#forecast for next 12 months
+sales_hw = hw(sales_ts,h=12)
+summary(sales_hw)
+```
+- Value of alpha(level): 0.3176. An alpha value of 0.3176 means that past data carries some weight compared to recent data.
+
+- Value of beta(trend): 0.0862, which is low. This model does not reflect drastic trend changes, but rather seeks more stable trend changes.
+
+- Value of gamma(seasonality) : 0.0001. The model is set to be almost insensitive to seasonal changes. This may be because seasonality is not significant, or because seasonality is assumed to be constant.
+
+- Initial state : level=818 it shows the initial level of data from the starting point of the forecast / trend=343 In a model with a trend, this initial trend value is used to start the prediction.  / seasonality= See above. Indicates the initial value corresponding to each season.
+
+- Value of sigma(standard deviations of error) : 2428.542. A smaller sigma value means that the model fits the data better, while a larger sigma value means that there is greater variation between the predicted and actual values. Compared to the sigma of simple smoothing, it's slightly smaller, implying that this method can be more accurate than the simple smoothing.
+
+```{r}
+#Residual Analysis
+sales_hw_res = residuals(sales_hw)
+#Plot
+plot(sales_hw_res)
+abline(h=0,col="red")
+```
+
+- The pattern is random, meaning that this model's predictions can be seen as unbiased and stable. Also this may mean that the model reflects the level, trend, and seasonality of time series data relatively well. However, since the range of fluctuations is not completely narrow, there is a possibility that some error may occur in the prediction.
+
+```{r}
+#Histogram
+hist(sales_hw_res)
+```
+
+- This shows that the residuals are normally distributed, and it indicates that the model's prediction error is not biased in any particular direction.
+
+```{r}
+#Plot of fitted vs. residuals
+sales_hw_fitted = fitted(sales_hw)
+ggplot(data = data.frame(fitted = sales_hw_fitted, residuals = sales_hw_res), 
+       aes(x = fitted, y = residuals)) + geom_point()
+```
+
+- The residuals are not evenly distributed around 0, and tend to be skewed upwards for fitted values close to 0, and the values of the residuals fluctuate greatly as the fitted value increases. This suggests that the model does not make good predictions in certain value ranges.
+
+```{r}
+#Plot of actual vs. residuals
+plot(as.numeric(sales_ts),sales_hw_res, xlab="actual",ylab="residuals")
+abline(h=0,col="red")
+```
+
+- Residuals are randomly distributed, meaning that there is no bias, although the range of residuals is quite large.
+
+```{r}
+#Acf
+plot(Acf(sales_hw_res))
+```
+
+- No value exceeds the confidence interval. There is no autocorrelation or pattern in this residuals.
+
+```{r}
+#Measures of accuracy
+accuracy(sales_hw)
+#Forecast for next year (table, plot)
+sales_hw
+plot(sales_hw)
+```
+
+#### Summary of this forecasting technique
+- How good is the accuracy? : MAPE is larger than other models, while RMSE is smaller. I will further check the accuracy below for the accurate judgement.
+
+- Predicted time series value : can be checked in the above table. Unlike Naive or simple smoothing, it has various different values for the given period.
+
+## 9. Accuracy Summary
+```{r}
+a=accuracy(sales_naive)
+b=accuracy(MA9_fc)
+c=accuracy(sales_ets_fc)
+d=accuracy(sales_hw)
+
+accuracymeasure = rbind(a,b,c,d)
+rownames(accuracymeasure) = c("naive","MA9","Simple smoothing","HW")
+
+accuracymeasure
+```
+- Naive : This is the simplest prediction method, which uses the values of the previous time point as the predicted values for the next time point. It can be useful when the data does not have a particular trend or seasonality. It has the advantage of being able to make predictions quickly.
+
+- Moving Average : A method of forecasting using the average of data over a certain period of time. It is suitable when there is no trend and the data is relatively stable.
+
+- Simple smoothing : A method that reflects the level of the data. This model makes predictions based on recent data, but reflects only the level of the data without trends or seasonality, so useful when there is no clear trend or seasonality in the data.
+
+- Holt winters : A method that reflects level, trend, and seasonality. Suitable for time series data with clear trends and seasonality.
+
+- ME (Mean Error) : This measures the overall direction of the forecast, so not suitable to evaluate the accuracy of the prediction. HW overestimates the most, and simple smoothing underestimates the value the most.
+
+- RMSE (Root mean squire error) : Best is Moving average and worst is Naive. RMSE is a good indicator of prediction accuracy because it is more sensitive to large errors. MA9 has the smallest RMSE and is evaluated as the most accurate model.
+
+- MAE(Mean Absolute Error) : This method gives equal importance to all errors, and the smaller the error, the more accurate it is. Best is Moving average and Worst is Naive method. 
+
+- MPE(Mean Percentage Error) : This method allows us to determine the relative error. Moving average has the smallest value, indicating that it underestimates by 0.3%. Simple smoothing, underestimates by 5% which is the largest among others.
+
+- MAPE(Mean Absolute Percentage Error) : This shows errors as absolute percentages. Moving average is the best, while Holt-winters is the worst with the largest value.
+
+- MASE (Mean Absolute Scaled Error) : Best is Moving average, worst is Naive
+
+- ACF1 : Holt-Winters is evaluated as the best fitting model with the lowest lag-1 correlation, while Naive has the highest correlation.
+
+
+## 10. Conclusion
+- Summary of analysis : Over the analyzed period, the time series data shows a general upward/downward trend. Also it reveals a seasonal pattern that recurs regularly. I initially assumed that Holt-winters would be the best model, because the data has seasonality. However, moving average method turned out to be the best. I guess this is because the seasonality is especially strong only in certain period, so HW was not able to catch the overall changes. So in conclusion, this data doesn't have too drastic changes and follows some regular patterns, and it makes MA the best fitting model.
+
+- I chose to use Moving average method to forecast. With this method, the value of the time series is predicted to decrease over the next year.(Please refer to the above) I can do 2 year forecast for this.
+```{r}
+MA9_fc_2y = forecast(MA9,h=24)
+plot(MA9_fc_2y)
+```
+
+- MA method says that the value will keep decrease for the next 2 years as well.
+
+- Rank : 1.MA / 2. Simple smoothinig / 3. HW / 4. Naive
